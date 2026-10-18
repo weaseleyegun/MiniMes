@@ -1,0 +1,17 @@
+# .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# 로컬 DB (실행하면 생성됨)
+*.db
+*.db-shm
+*.db-wal
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc

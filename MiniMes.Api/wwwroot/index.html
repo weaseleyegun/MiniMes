@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiniMes 작업자 화면</title>
+<style>
+  :root {
+    --bg: #11161c;
+    --panel: #1a222b;
+    --line: #2b3643;
+    --text: #e8edf2;
+    --muted: #8a99a8;
+    --run: #2e7d32;
+    --idle: #f2b705;
+    --alarm: #c62828;
+    --off: #4a5560;
+    --ok-bg: #1f4d2a;   --ok-fg: #b9f0c2;
+    --warn-bg: #5a4300; --warn-fg: #ffe08a;
+    --bad-bg: #5c1f1f;  --bad-fg: #ffb4b4;
+    --none-bg: #2f3944; --none-fg: #b8c4cf;
+    --accent: #4da3ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0; font-size: 20px; }
+  #conn { font-size: 14px; color: var(--muted); }
+  #conn.ok::before, #conn.err::before {
+    content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 8px; background: #43a047;
+  }
+  #conn.err::before { background: #e53935; }
+  nav { display: flex; gap: 4px; padding: 12px 24px 0; border-bottom: 1px solid var(--line); }
+  nav button {
+    background: none; border: none; color: var(--muted); font: inherit; font-size: 16px;
+    padding: 10px 18px; cursor: pointer; border-bottom: 3px solid transparent;
+  }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 24px; max-width: 1280px; margin: 0 auto; }
+  section { display: none; }
+  section.active { display: block; }
+
+  /* 설비 카드 */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+  .tile { border-radius: 12px; padding: 20px; background: var(--off); color: #fff; }
+  .tile.run { background: var(--run); }
+  .tile.idle { background: var(--idle); color: #1d1d1d; }
+  .tile.alarm { background: var(--alarm); }
+  .tile .code { font-size: 28px; font-weight: 700; }
+  .tile .status { font-size: 20px; font-weight: 700; margin: 4px 0 14px; }
+  .tile .row { font-size: 15px; margin: 6px 0; opacity: .95; }
+  .badge {
+    display: inline-block; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 15px;
+  }
+  .j-ok    { background: var(--ok-bg);   color: var(--ok-fg); }
+  .j-warn  { background: var(--warn-bg); color: var(--warn-fg); }
+  .j-bad   { background: var(--bad-bg);  color: var(--bad-fg); }
+  .j-none  { background: var(--none-bg); color: var(--none-fg); }
+  .tile .badge { margin: 8px 0; }
+
+  /* 표/버튼 */
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar .info { color: var(--muted); font-size: 14px; }
+  button.primary, select {
+    background: var(--accent); color: #05223f; border: none; border-radius: 8px;
+    font: inherit; font-weight: 700; padding: 10px 18px; cursor: pointer;
+  }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--line); font-weight: 400; }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; }
+  th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); font-size: 15px; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; background: #161d25; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { position: relative; height: 10px; background: #2a3440; border-radius: 5px; min-width: 120px; }
+  .bar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--accent); }
+  .note { color: var(--muted); font-size: 13px; line-height: 1.7; margin-top: 16px; }
+  .empty { color: var(--muted); padding: 40px; text-align: center; }
+  input[type=number] {
+    width: 90px; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; font: inherit; padding: 9px 10px;
+  }
+  .toolbar label { color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  h3 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 28px 0 10px; }
+  .warn { color: var(--warn-fg); }
+</style>
+</head>
+<body>
+<header>
+  <h1>MiniMes 작업자 화면</h1>
+  <div id="conn">연결 중…</div>
+</header>
+
+<nav id="tabs">
+  <button data-tab="board" class="active">설비 현황</button>
+  <button data-tab="standard">표준 Cycle Time</button>
+  <button data-tab="act">양/불 ACT 분석</button>
+  <button data-tab="predict">신규 품목 예측</button>
+</nav>
+
+<main>
+  <section id="board" class="active">
+    <div id="tiles" class="grid"></div>
+  </section>
+
+  <section id="standard">
+    <div class="toolbar">
+      <button class="primary" id="btnRecalc">표준 CT 재계산</button>
+      <span class="info" id="stdInfo">양품 사이클에서 이상치를 제거한 중앙값을 표준으로 정합니다.</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>품목 코드</th><th>품목명</th>
+        <th class="num">표준 CT(초)</th><th class="num">최근 평균(초)</th>
+        <th class="num">편차(%)</th><th>판정</th>
+      </tr></thead>
+      <tbody id="stdBody"></tbody>
+    </table>
+  </section>
+
+  <section id="act">
+    <div class="toolbar">
+      <select id="itemSel"><option value="">전체 품목</option></select>
+      <button class="primary" id="btnAct">분석</button>
+      <span class="info" id="actInfo"></span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>ACT 변수</th><th>불량과의 관련도</th>
+        <th class="num">효과 크기(d)</th>
+        <th class="num">불량 한계 이탈(%)</th><th class="num">양품 한계 이탈(%)</th>
+        <th>판정</th>
+      </tr></thead>
+      <tbody id="actBody"></tbody>
+    </table>
+    <p class="note">
+      효과 크기(d): 양품과 불량의 평균 차이를 표준편차로 나눈 값입니다. 0.2 약함 / 0.5 중간 / 0.8 이상 강함.<br>
+      한계 이탈: 품목별 양품 평균 ±3σ 밖으로 벗어난 비율입니다. 불량에서만 높게 나오는 변수가 불량 원인 후보입니다.
+    </p>
+  </section>
+
+  <section id="predict">
+    <div class="toolbar">
+      <select id="pMat">
+        <option>Steel</option><option>Stainless</option><option>Aluminum</option><option>Carbide</option>
+      </select>
+      <label>직경 <input id="pD" type="number" step="0.5" min="0.1" value="14"></label>
+      <label>절삭길이 <input id="pL" type="number" step="0.5" min="0.1" value="28"></label>
+      <label>날 수 <input id="pF" type="number" step="1" min="1" max="12" value="4"></label>
+      <button class="primary" id="btnPredict">CT 예측</button>
+    </div>
+    <div class="info" id="pResult" style="margin-bottom:8px"></div>
+
+    <div class="toolbar" style="margin-top:20px">
+      <button class="primary" id="btnTrain">모델 재학습</button>
+      <span class="info" id="modelInfo"></span>
+    </div>
+
+    <h3>표준 CT가 없는 등록 품목의 예측값</h3>
+    <table>
+      <thead><tr>
+        <th>품목 코드</th><th>품목명</th><th>재질</th>
+        <th class="num">직경</th><th class="num">절삭길이</th><th class="num">날 수</th>
+        <th class="num">예측 CT(초)</th><th class="num">예상 오차(±%)</th>
+      </tr></thead>
+      <tbody id="newBody"></tbody>
+    </table>
+
+    <h3>모델 검증: 품목을 하나씩 빼고 학습해 그 품목을 예측한 결과</h3>
+    <table>
+      <thead><tr>
+        <th>품목 코드</th><th class="num">표준 CT(초)</th><th class="num">예측 CT(초)</th><th class="num">오차(%)</th>
+      </tr></thead>
+      <tbody id="looBody"></tbody>
+    </table>
+    <p class="note">
+      재질, 직경, 절삭길이, 날 수로 표준 CT를 예측하는 회귀 모델(Ridge)입니다. 학습 데이터는 표준 CT가 계산된 품목뿐이라,
+      먼저 "표준 Cycle Time" 탭에서 재계산을 실행해야 합니다. 학습 범위를 벗어난 사양은 오차가 커질 수 있습니다.
+    </p>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (v, d = 1) => (v === null || v === undefined) ? "-" : Number(v).toFixed(d);
+const sign = (v) => (v === null || v === undefined) ? "-" : (v > 0 ? "+" : "") + Number(v).toFixed(1);
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  if (!res.ok) {
+    // 서버가 { detail: "..." } 형태로 사유를 주면 그대로 보여준다.
+    let detail = "";
+    try { detail = (await res.json()).detail ?? ""; } catch { /* 본문 없음 */ }
+    throw new Error(detail || "HTTP " + res.status);
+  }
+  return res.json();
+}
+
+function judgeClass(j) {
+  return { "정상": "j-ok", "주의": "j-warn", "초과": "j-bad",
+           "강한 관련": "j-bad", "중간 관련": "j-warn", "약한 관련": "j-none", "관련 낮음": "j-none" }[j] || "j-none";
+}
+
+function setConn(ok, text) {
+  const el = $("#conn");
+  el.className = ok ? "ok" : "err";
+  el.textContent = text;
+}
+
+/* ---------- 설비 현황 ---------- */
+const STATUS = { Run: ["run", "가동 중"], Idle: ["idle", "대기"], Alarm: ["alarm", "알람"] };
+
+function tileHtml(r) {
+  const stale = !r.lastCollectedAt || (Date.now() - new Date(r.lastCollectedAt).getTime()) > 15000;
+  const [cls, label] = stale ? ["", "수집 중단"] : (STATUS[r.status] || ["", r.status]);
+  let cycle = "CT -";
+  if (r.lastCycleTimeSec != null) {
+    cycle = `CT ${fmt(r.lastCycleTimeSec)}초`;
+    if (r.standardCt != null) cycle += ` / 표준 ${fmt(r.standardCt)}초 (${sign(r.deviationPct)}%)`;
+  }
+  return `<div class="tile ${cls}">
+    <div class="code">${esc(r.equipmentCode)}</div>
+    <div class="status">${esc(label)}</div>
+    <div class="row">RPM ${fmt(r.spindleRpm, 0)} · 이송 ${fmt(r.feedRate, 0)} · 부하 ${fmt(r.spindleLoadPct, 0)}%</div>
+    <div class="row">최근 품목 ${esc(r.lastItemCode ?? "-")}</div>
+    <div class="row">${esc(cycle)}</div>
+    <div class="badge ${judgeClass(r.judgement)}">CT 판정: ${esc(r.judgement)}</div>
+    <div class="row">최근 ${r.recentCycleCount}건 중 불량 ${r.recentDefectCount}건 (${fmt(r.defectRatePct)}%)</div>
+  </div>`;
+}
+
+async function refreshBoard() {
+  try {
+    const rows = await api("/api/dashboard/equipment");
+    $("#tiles").innerHTML = rows.length
+      ? rows.map(tileHtml).join("")
+      : '<div class="empty">수집된 설비 데이터가 없습니다. 수집기를 실행하세요.</div>';
+    setConn(true, "API 연결됨 · 갱신 " + new Date().toLocaleTimeString("ko-KR"));
+  } catch (e) {
+    setConn(false, "API 연결 실패 (" + e.message + ")");
+  }
+}
+
+/* ---------- 표준 CT ---------- */
+async function loadStandards() {
+  try {
+    const rows = await api("/api/standards/comparison");
+    $("#stdBody").innerHTML = rows.map((r) => `<tr>
+      <td>${esc(r.itemCode)}</td><td>${esc(r.name)}</td>
+      <td class="num">${fmt(r.standardCt)}</td><td class="num">${fmt(r.recentAvgCt)}</td>
+      <td class="num">${sign(r.deviationPct)}</td>
+      <td><span class="badge ${judgeClass(r.judgement)}">${esc(r.judgement)}</span></td>
+    </tr>`).join("");
+  } catch (e) {
+    $("#stdInfo").textContent = "불러오기 실패: " + e.message;
+  }
+}
+
+$("#btnRecalc").addEventListener("click", async () => {
+  const btn = $("#btnRecalc");
+  btn.disabled = true;
+  try {
+    const res = await api("/api/standards/recalculate", { method: "POST" });
+    $("#stdInfo").textContent =
+      `재계산 완료: ${res.updated.length}개 품목 갱신, ${res.skippedItemCodes.length}개 건너뜀(표본 부족)`;
+    await loadStandards();
+  } catch (e) {
+    $("#stdInfo").textContent = "재계산 실패: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/* ---------- ACT 분석 ---------- */
+async function loadItems() {
+  try {
+    const items = await api("/api/items");
+    $("#itemSel").innerHTML = '<option value="">전체 품목</option>' +
+      items.map((i) => `<option value="${esc(i.itemCode)}">${esc(i.itemCode)}</option>`).join("");
+  } catch (e) { /* 연결 상태는 상단에 표시된다 */ }
+}
+
+async function runAct() {
+  const code = $("#itemSel").value;
+  const btn = $("#btnAct");
+  btn.disabled = true;
+  try {
+    const res = await api("/api/analysis/act" + (code ? "?itemCode=" + encodeURIComponent(code) : ""));
+    $("#actInfo").textContent =
+      `품목 ${res.itemCount}개 · 양품 ${res.goodCount}건 · 불량 ${res.defectCount}건`;
+    $("#actBody").innerHTML = res.variables.length
+      ? res.variables.map((v) => {
+          const w = Math.min(Math.abs(v.cohensD) / 2, 1) * 100;
+          return `<tr>
+            <td>${esc(v.variable)}</td>
+            <td><div class="bar"><span style="width:${w}%"></span></div></td>
+            <td class="num">${fmt(v.cohensD, 2)}</td>
+            <td class="num">${fmt(v.defectOutOfLimitPct)}</td>
+            <td class="num">${fmt(v.goodOutOfLimitPct)}</td>
+            <td><span class="badge ${judgeClass(v.judgement)}">${esc(v.judgement)}</span></td>
+          </tr>`;
+        }).join("")
+      : '<tr><td colspan="6" class="empty">분석할 데이터가 부족합니다 (품목당 양품 20건 이상, 불량 1건 이상 필요).</td></tr>';
+  } catch (e) {
+    $("#actInfo").textContent = "분석 실패: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+$("#btnAct").addEventListener("click", runAct);
+
+/* ---------- 신규 품목 예측 ---------- */
+async function loadPredict() {
+  try {
+    const m = await api("/api/prediction/model");
+    $("#modelInfo").textContent =
+      `학습 품목 ${m.nSamples}개 · 교차검증 평균 오차 ${fmt(m.looMapePct, 2)}% · 규제 강도 ${m.alpha}`;
+    $("#looBody").innerHTML = m.rows.map((r) => `<tr>
+      <td>${esc(r.itemCode)}</td><td class="num">${fmt(r.standardCt)}</td>
+      <td class="num">${fmt(r.predictedCt)}</td><td class="num">${sign(r.errorPct)}</td></tr>`).join("");
+  } catch (e) {
+    $("#modelInfo").textContent = "모델 없음: " + e.message;
+    $("#looBody").innerHTML = "";
+  }
+
+  try {
+    const rows = await api("/api/prediction/new-items");
+    $("#newBody").innerHTML = rows.length
+      ? rows.map((r) => `<tr>
+          <td>${esc(r.itemCode)}</td><td>${esc(r.name)}</td><td>${esc(r.material)}</td>
+          <td class="num">${fmt(r.diameter)}</td><td class="num">${fmt(r.cutLength)}</td>
+          <td class="num">${r.fluteCount}</td>
+          <td class="num"><b>${fmt(r.predictedCtSec)}</b></td>
+          <td class="num">±${fmt(r.expectedErrorPct, 2)}</td></tr>`).join("")
+      : '<tr><td colspan="8" class="empty">표준 CT가 없는 등록 품목이 없습니다.</td></tr>';
+  } catch (e) {
+    $("#newBody").innerHTML = `<tr><td colspan="8" class="empty">${esc(e.message)}</td></tr>`;
+  }
+}
+
+$("#btnPredict").addEventListener("click", async () => {
+  const out = $("#pResult");
+  try {
+    const r = await api("/api/prediction/ct", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        material: $("#pMat").value,
+        diameter: Number($("#pD").value),
+        cutLength: Number($("#pL").value),
+        fluteCount: Number($("#pF").value),
+      }),
+    });
+    out.className = "info";
+    out.textContent = `예측 CT ${fmt(r.predictedCtSec)}초 (범위 ${fmt(r.lowCtSec)} ~ ${fmt(r.highCtSec)}초, 예상 오차 ±${fmt(r.expectedErrorPct, 2)}%)`;
+    if (r.warning) { out.className = "info warn"; out.textContent += " · " + r.warning; }
+  } catch (e) {
+    out.className = "info warn";
+    out.textContent = "예측 실패: " + e.message;
+  }
+});
+
+$("#btnTrain").addEventListener("click", async () => {
+  const btn = $("#btnTrain");
+  btn.disabled = true;
+  try {
+    await api("/api/prediction/train", { method: "POST" });
+  } catch (e) {
+    $("#modelInfo").textContent = "학습 실패: " + e.message;
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+  await loadPredict();
+});
+
+/* ---------- 탭 ---------- */
+$("#tabs").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button[data-tab]");
+  if (!btn) return;
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b === btn));
+  document.querySelectorAll("section").forEach((s) => s.classList.toggle("active", s.id === btn.dataset.tab));
+  if (btn.dataset.tab === "standard") loadStandards();
+  if (btn.dataset.tab === "act") runAct();
+  if (btn.dataset.tab === "predict") loadPredict();
+});
+
+refreshBoard();
+loadItems();
+setInterval(refreshBoard, 2000);
+</script>
+</body>
+</html>
